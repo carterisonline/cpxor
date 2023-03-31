@@ -1,4 +1,4 @@
-# Iteration 1
+# Implementation Notes
 
 - Walkdir - Read filenames from a directory recursively
 - Seahash - Fast hash function (using streaming, 1KiB chunks)
@@ -7,8 +7,7 @@
 - std::fs::copy - Copying files
 - std::fs::create_dir_all - Creating parent directories automatically
 
-## Speed
+Command: `$ cpxor testpaths/Source testpaths/Modified testpaths/Out`
 
-`$ cpxor testpaths/Source testpaths/Modified testpaths/Out`
-
-- 2 Files: 67ms
+- Iteration 1: 67ms
+- Iteration 2: 56ms

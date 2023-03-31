@@ -32,6 +32,10 @@ fn hash_file(buf: &mut [u8], mut file: File) -> std::io::Result<u64> {
             break;
         }
         hasher.write(&buf[..bytes_read]);
+
+        if bytes_read < buf.len() {
+            break;
+        }
     }
 
     Ok(hasher.finish())
@@ -57,13 +61,15 @@ fn cpxor<T: AsRef<Path>, U: AsRef<Path>, V: AsRef<Path>>(
             continue;
         }
 
-        if File::open(path1.as_ref().join(relative)).is_err() {
+        if !path1.as_ref().join(relative).exists() {
             cp_file_safe(out_path.as_ref(), &entry.path(), relative)?;
             continue;
         }
 
+        let orig_file = File::open(path1.as_ref().join(relative))?;
+
         let h1 = hash_file(&mut buf, file)?;
-        let h2 = hash_file(&mut buf, File::open(path1.as_ref().join(relative))?)?;
+        let h2 = hash_file(&mut buf, orig_file)?;
 
         if h1 != h2 {
             cp_file_safe(out_path.as_ref(), &entry.path(), relative)?;
@@ -76,7 +82,11 @@ fn cpxor<T: AsRef<Path>, U: AsRef<Path>, V: AsRef<Path>>(
 #[inline(always)]
 fn cp_file_safe(parent: &Path, source: &Path, relative: &Path) -> std::io::Result<()> {
     let out_path = parent.join(relative);
-    std::fs::create_dir_all(out_path.parent().unwrap())?;
+    if let Some(parent_dir) = out_path.parent() {
+        if !parent_dir.exists() {
+            std::fs::create_dir_all(parent_dir)?;
+        }
+    }
     std::fs::copy(source, out_path)?;
     Ok(())
 }
