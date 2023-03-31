@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::hash::Hasher;
-use std::io::Read;
+use std::io::{BufReader, Read};
 use std::path::Path;
 
 use seahash::SeaHasher;
@@ -23,7 +23,7 @@ fn main() {
     .expect("Failed to copy files");
 }
 
-fn hash_file(buf: &mut [u8], mut file: File) -> std::io::Result<u64> {
+fn hash_file(buf: &mut [u8], mut file: BufReader<File>) -> std::io::Result<u64> {
     let mut hasher = SeaHasher::new();
 
     loop {
@@ -46,18 +46,18 @@ fn cpxor<T: AsRef<Path>, U: AsRef<Path>, V: AsRef<Path>>(
     path2: U,
     out_path: V,
 ) -> std::io::Result<()> {
-    if File::open(&out_path).is_err() {
+    if !out_path.as_ref().exists() {
         std::fs::create_dir_all(&out_path)?;
     }
 
-    let mut buf = [0u8; 1024];
+    let mut buf = [0u8; 1024 * 8];
 
     for entry in WalkDir::new(&path2) {
         let entry = entry?;
         let entry_path = entry.path();
         let relative = entry_path.strip_prefix(&path2).unwrap();
-        let file = File::open(&entry.path())?;
-        if file.metadata()?.is_dir() {
+
+        if entry.file_type().is_dir() {
             continue;
         }
 
@@ -66,7 +66,9 @@ fn cpxor<T: AsRef<Path>, U: AsRef<Path>, V: AsRef<Path>>(
             continue;
         }
 
-        let orig_file = File::open(path1.as_ref().join(relative))?;
+        let file = BufReader::new(File::open(&entry.path())?);
+
+        let orig_file = BufReader::new(File::open(path1.as_ref().join(relative))?);
 
         let h1 = hash_file(&mut buf, file)?;
         let h2 = hash_file(&mut buf, orig_file)?;
