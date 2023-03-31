@@ -13,3 +13,4 @@ Command: `$ cpxor testpaths/Source testpaths/Modified testpaths/Out`
 - Iteration 2: 56ms
 - Iteration 3: 52ms
 - Iteration 4: 47ms
+- Iteration 5: 37ms

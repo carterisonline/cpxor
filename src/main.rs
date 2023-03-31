@@ -10,11 +10,12 @@ use std::path::{Path, PathBuf};
 use io_uring::{opcode, types, IoUring};
 use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
+use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use seahash::SeaHasher;
 use walkdir::WalkDir;
 
 const BUF_LEN: usize = 1024 * 8;
-const RING_ENTRIES: usize = 1024;
+const RING_ENTRIES: usize = 2048;
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -62,8 +63,6 @@ fn cpxor<T: AsRef<Path>, U: AsRef<Path>, V: AsRef<Path>>(
 
     let mut ring = IoUring::new(RING_ENTRIES as _)?;
 
-    let mut buf = [0u8; BUF_LEN];
-
     let mut parent_dir = None;
     let mut modified_parent_fd = None;
     let mut source_parent_fd = None;
@@ -80,7 +79,6 @@ fn cpxor<T: AsRef<Path>, U: AsRef<Path>, V: AsRef<Path>>(
             ring_finish(
                 path2.as_ref(),
                 &mut ring,
-                &mut buf,
                 out_path.as_ref(),
                 &active_files,
                 &source_files,
@@ -134,7 +132,6 @@ fn cpxor<T: AsRef<Path>, U: AsRef<Path>, V: AsRef<Path>>(
     ring_finish(
         path2.as_ref(),
         &mut ring,
-        &mut buf,
         out_path.as_ref(),
         &active_files,
         &source_files,
@@ -146,7 +143,6 @@ fn cpxor<T: AsRef<Path>, U: AsRef<Path>, V: AsRef<Path>>(
 fn ring_finish(
     source_path: &Path,
     ring: &mut IoUring,
-    buf: &mut [u8],
     out_path: &Path,
     active_files: &Vec<CString>,
     source_files: &Vec<PathBuf>,
@@ -154,23 +150,28 @@ fn ring_finish(
     let l = ring.submission().len();
     ring.submit_and_wait(l).unwrap();
 
-    for (i, [x1, x2]) in ring.completion().array_chunks().enumerate() {
+    let c = ring.completion().map(|e| e.result()).collect::<Vec<_>>();
+
+    c.par_iter().chunks(2).enumerate().for_each(|(i, v)| {
+        let mut buf = [0u8; BUF_LEN];
+
         let source_file_dir = Path::new(source_files[i].to_str().unwrap());
         let relative_dir = Path::new(active_files[i].to_str().unwrap());
 
         unsafe {
-            let h1 = hash_file(buf, File::from_raw_fd(x1.result()))?;
-            let h2 = hash_file(buf, File::from_raw_fd(x2.result()))?;
+            let h1 = hash_file(&mut buf, File::from_raw_fd(*v[0])).unwrap();
+            let h2 = hash_file(&mut buf, File::from_raw_fd(*v[1])).unwrap();
 
             if h1 != h2 {
                 cp_file_safe(
                     &replace_prefix(source_file_dir.parent(), source_path, out_path).unwrap(),
                     &source_file_dir,
                     &relative_dir,
-                )?;
+                )
+                .unwrap();
             }
         }
-    }
+    });
 
     Ok(())
 }

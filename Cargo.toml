@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 io-uring = "0.5.13"
 nix = "0.26.2"
+rayon = "1.7.0"
 seahash = "4.1.0"
 slab = "0.4.8"
 walkdir = "2.3.3"
